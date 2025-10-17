@@ -1,4 +1,5 @@
 mod code_extractor;
+mod code_wrapper;
 
 use pyo3::prelude::*;
 
@@ -17,6 +18,10 @@ fn fastrlrewards(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract_code, m)?)?;
     m.add_function(wrap_pyfunction!(
         code_extractor::extract_code_from_completion,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        code_wrapper::wrap_tests_for_complete_execution,
         m
     )?)?;
     Ok(())
