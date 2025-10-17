@@ -3,4 +3,9 @@ name = "fast-rl-rewards"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "fastrlrewards"
+crate-type = ["cdylib"]
+
 [dependencies]
+pyo3 = {version = "0.26.0", features = ["extension-module"]}
