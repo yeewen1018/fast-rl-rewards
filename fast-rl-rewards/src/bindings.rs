@@ -16,12 +16,13 @@ pub struct PyRewardEvaluator {
 #[pymethods]
 impl PyRewardEvaluator {
     #[new]
-    #[pyo3(signature = (timeout_seconds=15, memory_limit_mb=512, cpu_time_limit=12))]
-    fn new(timeout_seconds: u64, memory_limit_mb: u64, cpu_time_limit: u64) -> Self {
+    #[pyo3(signature = (timeout_seconds=15, memory_limit_mb=512, cpu_time_limit=12, num_threads=32))]
+    fn new(timeout_seconds: u64, memory_limit_mb: u64, cpu_time_limit: u64, num_threads: usize,) -> Self {
         let config = EvaluatorConfig {
             timeout_seconds,
             memory_limit_mb,
             cpu_time_limit,
+            num_threads: Some(num_threads),
         };
 
         Self {
@@ -40,6 +41,7 @@ impl PyRewardEvaluator {
     #[pyo3(signature = (completions, **kwargs))]
     fn execution_reward(
         &self,
+        py: Python,
         completions: &Bound<'_, PyList>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<f64>> {
@@ -57,9 +59,11 @@ impl PyRewardEvaluator {
             )
         };
 
-        Ok(self
-            .evaluator
-            .evaluate_execution_batch(&completions, &tests, &entry_points))
+        py.detach(||{
+            Ok(self
+                .evaluator
+                .evaluate_execution_batch(&completions, &tests, &entry_points))
+        })
     }
 }
 
@@ -143,6 +147,7 @@ pub fn format_reward(completions: &Bound<'_, PyList>) -> PyResult<Vec<f64>> {
 #[pyfunction]
 #[pyo3(signature = (completions, **kwargs))]
 pub fn execution_reward(
+    py: Python,
     completions: &Bound<'_, PyList>,
     kwargs: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<Vec<f64>> {
@@ -160,5 +165,7 @@ pub fn execution_reward(
         )
     };
 
-    Ok(DEFAULT_EVALUATOR.evaluate_execution_batch(&completions, &tests, &entry_points))
+    py.detach(||{
+        Ok(DEFAULT_EVALUATOR.evaluate_execution_batch(&completions, &tests, &entry_points))
+    })
 }

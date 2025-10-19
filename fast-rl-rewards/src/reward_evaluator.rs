@@ -1,6 +1,8 @@
 use crate::code_extractor::extract_code_from_completion;
 use crate::code_wrapper::wrap_tests_for_complete_execution;
 use crate::sandbox::execute_code_with_tests_firejail;
+use rayon::prelude::*;
+use rayon::ThreadPoolBuilder; 
 
 /// Configuration for the reward evaluator
 #[derive(Clone, Debug)]
@@ -8,6 +10,7 @@ pub struct EvaluatorConfig {
     pub timeout_seconds: u64,
     pub memory_limit_mb: u64,
     pub cpu_time_limit: u64,
+    pub num_threads: Option<usize>, 
 }
 
 impl Default for EvaluatorConfig {
@@ -16,6 +19,7 @@ impl Default for EvaluatorConfig {
             timeout_seconds: 15,
             memory_limit_mb: 512,
             cpu_time_limit: 12,
+            num_threads: Some(32),
         }
     }
 }
@@ -26,7 +30,13 @@ pub struct RewardEvaluator {
 
 impl RewardEvaluator {
     pub fn new(config: EvaluatorConfig) -> Self {
-        Self { config }
+        if let Some(num_threads) = config.num_threads {
+            ThreadPoolBuilder::new()
+                .num_threads(num_threads)
+                .build_global()
+                .ok();
+        }
+        Self{config}
     }
 
     fn has_valid_format(text: &str) -> bool {
@@ -128,9 +138,9 @@ impl RewardEvaluator {
         );
 
         completions
-            .iter()
-            .zip(tests.iter())
-            .zip(entry_points.iter())
+            .par_iter()
+            .zip(tests.par_iter())
+            .zip(entry_points.par_iter())
             .map(|((c, t), e)| self.evaluate_single(c, t, e))
             .collect()
     }
