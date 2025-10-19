@@ -1,5 +1,6 @@
 mod code_extractor;
 mod code_wrapper;
+mod sandbox;
 
 use pyo3::prelude::*;
 
@@ -22,6 +23,10 @@ fn fastrlrewards(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(
         code_wrapper::wrap_tests_for_complete_execution,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        sandbox::execute_code_with_tests_firejail,
         m
     )?)?;
     Ok(())
