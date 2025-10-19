@@ -1,8 +1,8 @@
 use crate::code_extractor::extract_code_from_completion;
 use crate::code_wrapper::wrap_tests_for_complete_execution;
 use crate::sandbox::execute_code_with_tests_firejail;
+use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
-use rayon::ThreadPoolBuilder; 
 
 /// Configuration for the reward evaluator
 #[derive(Clone, Debug)]
@@ -10,7 +10,7 @@ pub struct EvaluatorConfig {
     pub timeout_seconds: u64,
     pub memory_limit_mb: u64,
     pub cpu_time_limit: u64,
-    pub num_threads: Option<usize>, 
+    pub num_threads: Option<usize>,
 }
 
 impl Default for EvaluatorConfig {
@@ -36,7 +36,7 @@ impl RewardEvaluator {
                 .build_global()
                 .ok();
         }
-        Self{config}
+        Self { config }
     }
 
     fn has_valid_format(text: &str) -> bool {

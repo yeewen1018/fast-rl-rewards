@@ -17,7 +17,12 @@ pub struct PyRewardEvaluator {
 impl PyRewardEvaluator {
     #[new]
     #[pyo3(signature = (timeout_seconds=15, memory_limit_mb=512, cpu_time_limit=12, num_threads=32))]
-    fn new(timeout_seconds: u64, memory_limit_mb: u64, cpu_time_limit: u64, num_threads: usize,) -> Self {
+    fn new(
+        timeout_seconds: u64,
+        memory_limit_mb: u64,
+        cpu_time_limit: u64,
+        num_threads: usize,
+    ) -> Self {
         let config = EvaluatorConfig {
             timeout_seconds,
             memory_limit_mb,
@@ -59,7 +64,7 @@ impl PyRewardEvaluator {
             )
         };
 
-        py.detach(||{
+        py.detach(|| {
             Ok(self
                 .evaluator
                 .evaluate_execution_batch(&completions, &tests, &entry_points))
@@ -165,7 +170,7 @@ pub fn execution_reward(
         )
     };
 
-    py.detach(||{
+    py.detach(|| {
         Ok(DEFAULT_EVALUATOR.evaluate_execution_batch(&completions, &tests, &entry_points))
     })
 }
