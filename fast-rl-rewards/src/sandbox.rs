@@ -14,7 +14,7 @@ static TEST_RESULTS_PATTERN: Lazy<Regex> =
 
 #[pyfunction]
 #[pyo3(signature = (code, timeout=10, memory_limit_mb=512, cpu_time_limit=12))]
-pub fn execute_code_with_tests_firejail(
+pub fn run_sandboxed_tests(
     code: &str,
     timeout: u64,
     memory_limit_mb: u64,

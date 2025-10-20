@@ -1,11 +1,14 @@
 use crate::evaluator::{EvaluatorConfig, RewardEvaluator};
 use once_cell::sync::Lazy;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 /// Global default evaluator for module-level functions
-static DEFAULT_EVALUATOR: Lazy<RewardEvaluator> =
-    Lazy::new(|| RewardEvaluator::new(EvaluatorConfig::default()));
+static DEFAULT_EVALUATOR: Lazy<RewardEvaluator> = Lazy::new(|| {
+    RewardEvaluator::new(EvaluatorConfig::default())
+        .expect("Default evaluator configuration should always be valid")
+});
 
 /// Python-facing reward evaluator class
 #[pyclass(name = "RewardEvaluator")]
@@ -22,7 +25,7 @@ impl PyRewardEvaluator {
         memory_limit_mb: u64,
         cpu_time_limit: u64,
         num_threads: usize,
-    ) -> Self {
+    ) -> PyResult<Self> {
         let config = EvaluatorConfig {
             timeout_seconds,
             memory_limit_mb,
@@ -30,15 +33,16 @@ impl PyRewardEvaluator {
             num_threads: Some(num_threads),
         };
 
-        Self {
-            evaluator: RewardEvaluator::new(config),
-        }
+        let evaluator = RewardEvaluator::new(config)
+            .map_err(|e| PyValueError::new_err(format!("Invalid configuration: {}", e)))?;
+
+        Ok(Self { evaluator })
     }
 
     /// Evaluate format rewards (checks for <think> and <answer> tags)
     fn format_reward(&self, completions: &Bound<'_, PyList>) -> PyResult<Vec<f64>> {
         let completions = extract_completions_from_pylist(completions)?;
-        Ok(self.evaluator.evaluate_format(&completions))
+        Ok(self.evaluator.evaluate_response_format(&completions))
     }
 
     /// Evaluate execution rewards (runs code with tests)
@@ -145,7 +149,7 @@ fn extract_string_list_from_kwargs(
 #[pyfunction]
 pub fn format_reward(completions: &Bound<'_, PyList>) -> PyResult<Vec<f64>> {
     let completions = extract_completions_from_pylist(completions)?;
-    Ok(DEFAULT_EVALUATOR.evaluate_format(&completions))
+    Ok(DEFAULT_EVALUATOR.evaluate_response_format(&completions))
 }
 
 /// Module-level function for execution reward (uses default evaluator)

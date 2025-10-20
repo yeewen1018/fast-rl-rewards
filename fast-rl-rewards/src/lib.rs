@@ -27,10 +27,10 @@
 //! - [`sandbox`]: Firejail sandboxed execution
 
 mod bindings;
-mod extraction;
-mod test_wrapper;
 mod evaluator;
+mod extraction;
 mod sandbox;
+mod test_wrapper;
 
 use pyo3::prelude::*;
 
@@ -52,9 +52,6 @@ fn fastrlrewards(m: &Bound<'_, PyModule>) -> PyResult<()> {
         test_wrapper::wrap_tests_for_complete_execution,
         m
     )?)?;
-    m.add_function(wrap_pyfunction!(
-        sandbox::execute_code_with_tests_firejail,
-        m
-    )?)?;
+    m.add_function(wrap_pyfunction!(sandbox::run_sandboxed_tests, m)?)?;
     Ok(())
 }
