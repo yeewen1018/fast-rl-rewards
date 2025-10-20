@@ -1,54 +1,43 @@
 //! src/code_extractor.rs
 //!
-//! Contains the functions to extract code from LLM responses that follow a structured
-//! format with `<think>...</think>` and `<answer>`...`</answer>` tags.
+//! Code extraction from structured LLM responses.
+//!
+//! This module handles extracting Python code from completions that follow the
+//! `<think>...</think>` `<answer>...</answer>` format used in reasoning models.
+//!
+//! # Extraction strategy:
+//! 1. Try to extract from `<answer>...</answer>` tags
+//! 2. Fallback to markdown code blocks (```python```)
+//! 3. Return entire text as last resort.
+//!
+//! Markdown fences inside answer tags are automatically stripped.
+//!
+//! # Examples
+//! ```python
+//! import fastrlrewards
+//!
+//! completion = "<think>reasoning</think>\n<answer>```python\nprint('hi')\n```</answer>"
+//! code = fastrlrewards.extract_code_from_completion(completion)
+//! assert code == "print('hi')"
+//! ```
 
 use once_cell::sync::Lazy;
 use pyo3::prelude::*;
 use regex::Regex;
 
-/// Regex patterns:
-/// 1. Matches content within <answer>...</answer> tags (case-insensitive)
+// Regex pattern for content within <answer>...</answer> tags (case-insensitive)
 static ANSWER_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?is)<answer>(.*?)</answer>").unwrap());
 
-/// 2. Matches markdown code blocks with Python language specifier
+// Regex pattern for markdown code blocks with Python language specifier
 static CODE_BLOCK_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?s)```python\s*\n(.*?)\n```").unwrap());
 
-/// The following regex patterns are for cleaning markdown code blocks inside answer tags.
-/// 3. Matches opening markdown fence with python language: ```python followed by whitespace and newline
+// Patterns for cleaning markdown code blocks inside answer tags
 static MARKDOWN_START_PYTHON: Lazy<Regex> = Lazy::new(|| Regex::new(r"^```python\s*\n").unwrap());
-
-/// 4. Matches opening markdown fence without language: ``` followed by whitespace and newline
 static MARKDOWN_START_PLAIN: Lazy<Regex> = Lazy::new(|| Regex::new(r"^```\s*\n").unwrap());
-
-/// 5. Matches closing markdown fence: newline followed by ``` and optional trailing whitespace
 static MARKDOWN_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n```\s*$").unwrap());
 
-/// Extracts Python code from a structured LLM completion. It tries multiple extraction strategies
-/// in the following order:
-/// 1. Extract from `<answer>..</answer>` tags
-/// 2. Extract from markdown code blocks with `python` language specifier
-/// 3. Return the entire completion as is (fallback for malformed responses)
-///
-/// When extracting from `<answer>..</answer>` tags, the function automatically strips any
-/// markdown code block fences (```python or ```) that may wrap the code.
-///
-/// # Arguments:
-/// - `completion`: The full text of the LLM completion to parse
-///
-/// # Returns:
-/// - `String`: The extracted code
-///
-/// # Examples:
-/// ```python
-/// import fastrlrewards
-///
-/// let completion = "<think>reasoning here</think>\n<answer>```python\nprint('hello')\n```</answer>";
-/// let code = fastrlrewards.extract_code_from_completion(completion);
-/// assert_eq!(code, "print('hello')");
-/// ```
 #[pyfunction]
 pub fn extract_code_from_completion(completion: &str) -> String {
     if let Some(captures) = ANSWER_PATTERN.captures(completion) {
