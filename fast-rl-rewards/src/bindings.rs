@@ -1,4 +1,4 @@
-use crate::reward_evaluator::{EvaluatorConfig, RewardEvaluator};
+use crate::evaluator::{EvaluatorConfig, RewardEvaluator};
 use once_cell::sync::Lazy;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};

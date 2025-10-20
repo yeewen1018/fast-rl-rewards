@@ -1,5 +1,5 @@
-use crate::code_extractor::extract_code_from_completion;
-use crate::code_wrapper::wrap_tests_for_complete_execution;
+use crate::extraction::extract_code_from_completion;
+use crate::test_wrapper::wrap_tests_for_complete_execution;
 use crate::sandbox::execute_code_with_tests_firejail;
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
