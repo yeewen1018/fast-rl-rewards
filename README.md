@@ -75,41 +75,71 @@ trainer.train()
 
 
 ## Performance and Scalability
-<p align="center">
-  <img src="./assets/profiling_results.png" alt="fast-rl-rewards diagram" width="500%">
-  <fi
-</p>
 
-We profiled `fast-rl-rewards` on **Qwen2.5-Coder-7B-Instruct** fine-tuned with the **code-r1-12k** dataset under the following representative setup:
+### 1. Identifying Bottleneck
+We profiled `fast-rl-rewards` on **Qwen2.5-Coder-7B-Instruct**, fine-tuned with the [**code-r1-12k dataset**](https://huggingface.co/datasets/ganler/code-r1-12k) - a 12K-sample RL dataset (2K LeetCode + 10K verified TACO samples) for code reasoning and execution tasks.
 
-- 6 GPUs for text generation, 2 GPUs for reward evaluation  
+Experiments were run on **8xA100-SXM 80GB GPUs** using: 
+- 6 GPUs for **prefill and policy optimization**
+- 2 GPUs for **vLLM-based generation**
 - `num_generations = 32`, `per_device_batch_size = 8`, `gradient_accumulation_steps = 4`
 
-This configuration reflects a **generation-optimal setting**, where inference throughput is saturated — highlighting reward computation as the primary bottleneck.
+This configuration represents an ideal single-node inference setup. Generation throughput is optimized via vLLM parallelism, and CPU-bound reward computation is revealed as the next major bottleneck.
+<div align="center">
+  <br>
+  <figure>
+  <img src="./assets/wandb_profiling_results.png" alt="fast-rl-rewards diagram" width="100%">
+  <figcaption><b>Figure 2:</b> W&B profiling showing reward computation latency comparable to generation during Qwen2.5-Coder-7B training. </figcaption>
+  </figure>
+  <br><br>
+</div>
 
 
-| Config | Reward Engine | Avg GPU Utilization | Avg CPU Exec Time (µs) | Step Time (µs) |
-|:--------|:----------------|:-------------------:|:----------------------:|:---------------:|
-| Python baseline | Python | 56.9% | 835,019 | 31,208,489 |
-| fast-rl-rewards | Rust | **78.0%** | **554,420** | **23,030,929** |
+### 2. Trace Visualization 
 
-> Profiling captured with PyTorch Profiler on 8×A100 (80 GB) GPUs.  
-> Rust-based reward evaluation eliminates CPU bottlenecks, improving GPU utilization by **37%** and reducing step latency by **26%**.
+PyTorch Profiler traces show that the reward computation step in the Python baseline takes roughly 11s, nearly matching the generation step.
+With `fast-rl-rewards`, this phase shrinks to around 2s, confirming significant CPU-side acceleration.
 
----
+<div align="center">
+  <br>
+  <figure>
+    <img src="./assets/python_trace.png" alt="Python Profiler Trace" width="95%">
+    <figcaption><b>Figure 3a:</b> Python baseline: Long CPU-bound reward spans (~11s) (REWARD_COM, PARALLEL_TEST), leading to GPU idle time.        </figcaption>
+  </figure>
+  <br><br>
+</div>
 
-## Scaling Results
+<div align="center">
+  <br>
+  <figure>
+    <img src="./assets/rust_trace.png" alt="Rust Profiler Trace" width="95%">
+    <figcaption><b>Figure 3b:</b> Rust optimization: Shorter reward spans (~2s) and improved overlap between CPU and GPU activity.</figcaption>
+  </figure>
+  <br><br>
+</div>
 
-To validate scaling efficiency, we benchmarked reward evaluation throughput across increasing rollout batch sizes.  
-`fast-rl-rewards` maintains near-linear scaling up to full CPU core saturation, demonstrating efficient parallelization via Rayon.
+### 3. GPU Utilization
+<div align="center">
+  <br>
+  <figure>
+  <img src="./assets/profiling_results.png" alt="fast-rl-rewards diagram" width="100%">
+  <figcaption><b>Figure 4:</b> Profiling comparison between Python (baseline) and Rust-optimized reward evaluation. </figcaption>
+  </figure>
+  <br><br>
+</div>
 
-| Config | # Completions | Python Reward (s) | Rust Reward (s) | Reward Speedup |
-|:--------|:--------------:|:----------------:|:---------------:|:----------------:|
-| Small | 3,072 | 11.21 | 2.26 | **4.96×** |
-| Medium | 6,144 | 13.22 | 4.17 | **3.17×** |
-| Large | 12,288 | 17.31 | 9.35 | **1.85×** |
-| XL | 24,576 | 27.19 | 18.26 | **1.49×** |
+- GPU utilization improved substantially (**56.8% → 78.0%**) while CPU “Other” time dropped (**38% → 16%**).
 
-> Benchmarked on 8×A100 (80 GB) GPUs.  
-> `fast-rl-rewards` achieves up to **4.9× faster** reward computation at smaller rollout sizes, maintaining consistent scaling as batch size increases.
+### 4. Scaling Results
+To validate scaling efficiency, we benchmarked reward evaluation throughput across increasing rollout batch sizes. We fix the `num_generations = 16`. 
 
+| Config     | per_device_batch_size | grad_accum_steps | total_batch_size | Python Reward (s) | Rust Reward (s) | Python Throughput<br>(completions/s) | Rust Throughput<br>(completions/s) |
+| :--------- | :-------------------: | :--------------: | :--------------: | :---------------: | :-------------: | :----------------------------------: | :--------------------------------: |
+| **Small**  |           8           |         4        |        512       |       11.21       |       2.26      |                  274                 |              **1,359**             |
+| **Medium** |           8           |         8        |       1,024      |       13.22       |       4.17      |                  465                 |              **1,472**             |
+| **Large**  |           16          |         8        |       2,048      |       17.31       |       9.35      |                  710                 |              **1,314**             |
+| **XL**     |           16          |        16        |       4,096      |       27.19       |      18.26      |                  904                 |              **1,346**             |
+
+- `fast-rl-rewards` accelerates reward computation by up to 5×,
+sustaining near-linear throughput scaling (~1.4K completions/s) until full CPU saturation.
+- Beyond this point, performance plateaus due to the fixed execution time of individual code-based rewards.
